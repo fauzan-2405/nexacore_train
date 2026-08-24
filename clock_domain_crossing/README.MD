@@ -1,0 +1,1 @@
+This folder used to store the clock domain crossing (CDC) training
