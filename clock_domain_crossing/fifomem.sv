@@ -13,5 +13,13 @@ module fifomem #(
     input logic [ADDR_WIDTH-1:0] raddr, // Read address
     input logic [WIDTH-1:0] rdata // Read data
 );
-    
+    logic [WIDTH-1:0] mem [0:DEPTH-1]; // Memory array
+
+    always_ff @(posedge wclk) begin
+        if (wclk_en) begin
+            mem[waddr] <= wdata; // Write data to memory
+        end
+    end
+
+    assign rdata = mem[raddr]; // Read data from memory
 endmodule
