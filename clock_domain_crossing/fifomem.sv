@@ -12,7 +12,7 @@ module fifomem #(
     input logic [WIDTH-1:0] wdata, // Write data
     input logic [ADDR_WIDTH-1:0] waddr, // Write address
     input logic [ADDR_WIDTH-1:0] raddr, // Read address
-    input logic [WIDTH-1:0] rdata // Read data
+    output logic [WIDTH-1:0] rdata // Read data
 );
     logic [WIDTH-1:0] mem [0:DEPTH-1]; // Memory array
     logic wclk_en, // Write clock enable

@@ -3,7 +3,8 @@
 // using a 2-stage FF chain with Vivado placement optimization
 
 module sync_ptr #(
-    parameter ADDR_WIDTH = 4
+    parameter DEPTH = 16,
+    parameter ADDR_WIDTH = $clog2(DEPTH)
 ) (
     input logic                 dest_clk,   // Destination clock domain
     input logic                 dest_rst_n, // Destination asynchrronous reset
