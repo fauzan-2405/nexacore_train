@@ -4,7 +4,7 @@
 module fifomem #(
     parameter WIDTH = 8, // Width of the data bus
     parameter DEPTH = 16, // Depth of the FIFO
-    paramerter ADDR_WIDTH = $clog2(DEPTH)
+    parameter ADDR_WIDTH = $clog2(DEPTH)
 ) (
     input logic wclk, // Write clock
     input logic wclk_en, // Write clock enable
@@ -14,7 +14,6 @@ module fifomem #(
     output logic [WIDTH-1:0] rdata // Read data
 );
     logic [WIDTH-1:0] mem [0:DEPTH-1]; // Memory array
-    logic wclk_en, // Write clock enable
 
     always_ff @(posedge wclk) begin
         if (wclk_en) begin

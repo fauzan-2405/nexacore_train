@@ -6,29 +6,29 @@ module fifol #(
     parameter DEPTH = 16,
     parameter ADDR_WIDTH = $clog2(DEPTH)
 ) (
-    input logic wclk,
-    input logic wrst_n,
-    input logic winc,
-    input logic [WIDTH-1:0] wdata, // Write data
-    output logic wfull,
+    input wire wclk,
+    input wire wrst_n,
+    input wire winc,
+    input wire [WIDTH-1:0] wdata, // Write data
+    output wire wfull,
 
-    input logic rclk,
-    input logic rrst_n,
-    input logic rinc,
-    output logic [WIDTH-1:0] rdata, // Read data
-    output logic rempty
+    input wire rclk,
+    input wire rrst_n,
+    input wire rinc,
+    output wire [WIDTH-1:0] rdata, // Read data
+    output wire rempty
 );
     // FIFO Write
-    logic fifo_write_full;
-    logic [ADDR_WIDTH-1:0] fifo_write_addr;
-    logic [ADDR_WIDTH:0] fifo_write_ptr;
-    logic [ADDR_WIDTH:0] fifo_rq2_wptr;
+    wire fifo_write_full;
+    wire [ADDR_WIDTH-1:0] fifo_write_addr;
+    wire [ADDR_WIDTH:0] fifo_write_ptr;
+    wire [ADDR_WIDTH:0] fifo_rq2_wptr;
 
     // FIFO Read
-    logic fifo_read_empty;
-    logic [ADDR_WIDTH-1:0] fifo_read_addr;
-    logic [ADDR_WIDTH:0] fifo_read_ptr;
-    logic [ADDR_WIDTH:0] fifo_wq2_rptr;
+    wire fifo_read_empty;
+    wire [ADDR_WIDTH-1:0] fifo_read_addr;
+    wire [ADDR_WIDTH:0] fifo_read_ptr;
+    wire [ADDR_WIDTH:0] fifo_wq2_rptr;
 
     // ================== FIFO Write Controller ================== 
     wptr_full #(
@@ -38,7 +38,7 @@ module fifol #(
         .wclk(wclk),
         .wrst_n(wrst_n),
         .winc(winc),
-        .wq_rptr(fifo_wq2_rptr),
+        .wq2_rptr(fifo_wq2_rptr),
         
         .waddr(fifo_write_addr),
         .wptr(fifo_write_ptr),
@@ -73,7 +73,7 @@ module fifol #(
         .rclk(rclk),
         .rrst_n(rrst_n),
         .rinc(rinc),
-        .rq_wptr(fifo_rq2_wptr),
+        .rq2_wptr(fifo_rq2_wptr),
         
         .raddr(fifo_read_addr),
         .rptr(fifo_read_ptr),
@@ -89,7 +89,7 @@ module fifol #(
         .wclk_en(winc & ~fifo_write_full),
         .wdata(wdata),
         .waddr(fifo_write_addr),
-        .raddr(rdata),
+        .raddr(rdata)
     );
 
     assign wfull    = fifo_write_full;
