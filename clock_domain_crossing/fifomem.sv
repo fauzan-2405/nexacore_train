@@ -20,6 +20,9 @@ module fifomem #(
             mem[waddr] <= wdata; // Write data to memory
         end
     end
+//    always_ff @(posedge wclk_en) begin
+//        mem[waddr]  <= wdata;
+//    end
 
     assign rdata = mem[raddr]; // Read data from memory
 endmodule

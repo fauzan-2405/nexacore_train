@@ -89,7 +89,8 @@ module fifol #(
         .wclk_en(winc & ~fifo_write_full),
         .wdata(wdata),
         .waddr(fifo_write_addr),
-        .raddr(rdata)
+        .raddr(fifo_read_addr),
+        .rdata(rdata)
     );
 
     assign wfull    = fifo_write_full;
