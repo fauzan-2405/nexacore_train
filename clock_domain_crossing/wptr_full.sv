@@ -10,7 +10,7 @@ module wptr_full #(
     input logic wclk,
     input logic wrst_n,
     input logic winc,
-    input logic [ADDR_WIDTH:0] wq2_rptr,   // Synchronized read pointer
+    input logic [ADDR_WIDTH:0] wq2_rptr,   // Synchronized grey code read pointer
 
     output logic [ADDR_WIDTH-1:0] waddr,
     output logic [ADDR_WIDTH:0] wptr,
