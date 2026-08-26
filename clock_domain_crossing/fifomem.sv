@@ -7,8 +7,7 @@ module fifomem #(
     paramerter ADDR_WIDTH = $clog2(DEPTH)
 ) (
     input logic wclk, // Write clock
-    input logic winc, // Write increment
-    input logic wfull, // Write full
+    input logic wclk_en, // Write clock enable
     input logic [WIDTH-1:0] wdata, // Write data
     input logic [ADDR_WIDTH-1:0] waddr, // Write address
     input logic [ADDR_WIDTH-1:0] raddr, // Read address
@@ -16,8 +15,6 @@ module fifomem #(
 );
     logic [WIDTH-1:0] mem [0:DEPTH-1]; // Memory array
     logic wclk_en, // Write clock enable
-
-    assign wclk_en = winc && ~winc;
 
     always_ff @(posedge wclk) begin
         if (wclk_en) begin
