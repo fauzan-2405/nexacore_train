@@ -20,15 +20,15 @@ module fifol #(
 );
     // FIFO Write
     logic fifo_write_full;
-    logic fifo_write_addr;
-    logic fifo_write_ptr;
-    logic fifo_rq2_wptr;
+    logic [ADDR_WIDTH-1:0] fifo_write_addr;
+    logic [ADDR_WIDTH:0] fifo_write_ptr;
+    logic [ADDR_WIDTH:0] fifo_rq2_wptr;
 
     // FIFO Read
     logic fifo_read_empty;
-    logic fifo_read_addr;
-    logic fifo_read_ptr;
-    logic fifo_wq2_rptr;
+    logic [ADDR_WIDTH-1:0] fifo_read_addr;
+    logic [ADDR_WIDTH:0] fifo_read_ptr;
+    logic [ADDR_WIDTH:0] fifo_wq2_rptr;
 
     // ================== FIFO Write Controller ================== 
     wptr_full #(
@@ -80,14 +80,13 @@ module fifol #(
         .rempty(fifo_read_empty)
     );
 
-    // FIFO Memory
+    // ================== FIFO Memory ==================
     fifomem #(
         .WIDTH(WIDTH),
         .DEPTH(DEPTH)
     ) fifo_memory (
         .wclk(wclk),
-        .winc(winc),
-        .wfull(fifo_write_full),
+        .wclk_en(winc & ~fifo_write_full),
         .wdata(wdata),
         .waddr(fifo_write_addr),
         .raddr(rdata),
