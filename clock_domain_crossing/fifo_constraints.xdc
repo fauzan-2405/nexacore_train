@@ -18,10 +18,12 @@ set_clock_groups -asynchronous -group [get_clocks wclk] -group [get_clocks rclk]
 # routing delays completely unbounded, which can cause severe bus skew (data coherency errors).
 # Instead, we bound the datapath delay to the destination clock period to keep bits tightly grouped.
 
-# Path A: Write Domain Pointer -> Read Domain Synchronizer (wclk to rclk)
-# Max delay bounded to Read Clock Period (16.0ns)
-set_max_delay -to [get_pins -hierarchical -filter {NAME =~ *sync_w2r/sync_reg_0_reg[*]/D}] 16.000 -datapath_only
+# Path A: Bounded to Read Clock Period (16.0ns)
+set_max_delay -from [get_cells -hierarchical -filter {NAME =~ *fifo_write_ctrl/wptr_*_reg[*]}] \
+              -to [get_pins -hierarchical -filter {NAME =~ *sync_w2r/sync_reg_0_reg[*]/D}] \
+              16.000 -datapath_only
 
-# Path B: Read Domain Pointer -> Write Domain Synchronizer (rclk to wclk)
-# Max delay bounded to Write Clock Period (10.0ns)
-set_max_delay -to [get_pins -hierarchical -filter {NAME =~ *sync_r2w/sync_reg_0_reg[*]/D}] 10.000 -datapath_only
+# Path B: Bounded to Write Clock Period (10.0ns)
+set_max_delay -from [get_cells -hierarchical -filter {NAME =~ *fifo_read_ctrl/rptr_*_reg[*]}] \
+              -to [get_pins -hierarchical -filter {NAME =~ *sync_r2w/sync_reg_0_reg[*]/D}] \
+              10.000 -datapath_only
