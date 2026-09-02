@@ -20,7 +20,7 @@ module axis_wrapper #(
     input wire m_axis_tready
 );
     wire fifo_write_full;
-    wire fifo_write_empty;
+    wire fifo_read_empty;
 
     wire winc_valid;
     wire rinc_valid;
@@ -38,13 +38,13 @@ module axis_wrapper #(
         .rrst_n (m_axis_aresetn),
         .rinc   (rinc_valid),
         .rdata  (m_axis_tdata),
-        .rempty (fifo_write_empty)
+        .rempty (fifo_read_empty)
     );
 
     assign winc_valid    = !fifo_write_full && s_axis_tvalid;
     assign s_axis_tready = !fifo_write_full;
 
     assign m_axis_tvalid = !fifo_read_empty;
-    assign rinc_valid    = !m_axis_tvalid && m_axis_tready;
+    assign rinc_valid    = m_axis_tvalid && m_axis_tready;
 
 endmodule

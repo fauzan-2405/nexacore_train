@@ -176,6 +176,7 @@ module testbench_axis_wrapper;
             begin
                 // This process will wait indefinitely because s_axis_tready is low
                 axis_write(8'hFF); 
+                $display("[TEST VERIFIED] Ahoy");
             end
             begin
                 // Timeout monitor to prove the write was blocked
@@ -184,7 +185,8 @@ module testbench_axis_wrapper;
                 // Clean up the stalled valid line
                 s_axis_tvalid <= 1'b0;
             end
-        join
+        join_any
+        disable fork;
 
         // ---------------------------------------------------------------------
         // Test Case 3: Standard Read-Burst to Empty (Empty Stalling Test)
@@ -239,8 +241,8 @@ module testbench_axis_wrapper;
             $error("[FAIL] Size mismatch! Expected %0d items, but captured %0d items.", 
                     expected_queue.size(), actual_queue.size());
         end else begin
-            bit pass = 1;
-            int size = expected_queue.size();
+            static bit pass = 1;
+            static int size = expected_queue.size();
             for (int idx = 0; idx < size; idx++) begin
                 if (expected_queue[idx] !== actual_queue[idx]) begin
                     $error("[FAIL] Data mismatch at index %0d! Sent=0x%h, Recv=0x%h", 
