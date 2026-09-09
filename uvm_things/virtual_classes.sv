@@ -32,7 +32,7 @@ class write_transaction extends transaction_base;
     bit [31:0] data;
 
     function new(string name, bit [31:0] a, bit [31:0] d);
-        super.name(name);   // Call parent class constructor
+        super.new(name);   // Call parent class constructor
         this.addr = a;
         this.data = d;
     endfunction
@@ -73,6 +73,6 @@ module virtual_classes;
         base_h.display();
 
         // Calling the implemented pure virtual function
-        $display("Payload returned: 0x%8h\n", base_h.get_payload())
+        $display("Payload returned: 0x%8h\n", base_h.get_payload());
     end
 endmodule
