@@ -160,7 +160,9 @@ class adder_driver #(parameter int DATA_WIDTH = 8);
 endclass
 
 
-// C. MONITOR
+// =========================================================================
+// CORRECTED MONITOR (Pipeline-Aware Sampling)
+// =========================================================================
 class adder_monitor #(parameter int DATA_WIDTH = 8);
     virtual adder_if #(DATA_WIDTH)            vif;
     mailbox #(adder_transaction #(DATA_WIDTH)) mon2scb;
@@ -172,19 +174,28 @@ class adder_monitor #(parameter int DATA_WIDTH = 8);
 
     task run();
         adder_transaction #(DATA_WIDTH) tx;
+        bit [DATA_WIDTH-1:0] hold_a, hold_b;
 
         forever begin
             @(posedge vif.clk);
+            
+            // Step 1: Capture input operands on the valid_in cycle (T1)
+            if (vif.valid_in) begin
+                hold_a = vif.a;
+                hold_b = vif.b;
+            end
+
+            // Step 2: When DUT outputs result on the valid_out cycle (T2), build transaction
             if (vif.valid_out) begin
                 tx = new("Monitored_Tx");
-                tx.operand_a  = vif.a; // Note: Sampled from bus or synchronized pipeline
-                tx.operand_b  = vif.b;
-                tx.actual_sum = vif.sum;
+                tx.operand_a  = hold_a;    // Use operands captured during valid_in
+                tx.operand_b  = hold_b;
+                tx.actual_sum = vif.sum;   // Sample output sum
 
                 mon2scb.put(tx);
             end
         end
-    endtask
+  endtask
 endclass
 
 
