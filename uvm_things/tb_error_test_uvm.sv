@@ -9,7 +9,7 @@ class packet_base extends uvm_object;
     rand bit [31:0] data;
 
     // Constructor for uvm_object: exactly 1 argument 'name'
-    function new(string name = "packet_base")
+    function new(string name = "packet_base");
         super.new(name);
     endfunction
 
@@ -28,7 +28,7 @@ endclass
 class packet_corrupted extends packet_base;
     bit inject_error = 1'b1;
 
-    function new (string name = "packet_corrupted")
+    function new (string name = "packet_corrupted");
         super.new(name);
     endfunction
 
@@ -52,7 +52,7 @@ class my_driver extends uvm_component;
     // Register with the UVM factory
     `uvm_component_utils(my_driver)
 
-    task run_phase(uvm_phase phase)
+    task run_phase(uvm_phase phase);
         packet_base pkt;
 
         phase.raise_objection(this);
@@ -93,7 +93,7 @@ endclass
 
 // Derived Test: Applying Factory Override
 class error_test extends base_test;
-    function new(string_name = "error_test", uvm_component parent = null);
+    function new(string name = "error_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction
 
@@ -103,10 +103,10 @@ class error_test extends base_test;
         // FACTORY OVERRIDE:
         // Tell the global UVM factory to whenever anyone requests a 'packet_base' 
         // return a 'packet_corrupted' object instead
-        packet_base::set_type_override(packet_corrupted::get_type());
-    endfunction
-
-    super.build_phase(phase); // Builds driver
+        packet_base::type_id::set_type_override(packet_corrupted::get_type());
+        
+        super.build_phase(phase); // Builds driver
+    endfunction    
 endclass
 
 // ========================================================================= 
