@@ -30,7 +30,7 @@ class axis_seq_item #(
         super.new(name);
     endfunction
 
-    `uvm_object_utils(axis_seq_item)
+    `uvm_object_utils_begin(axis_seq_item)
         `uvm_field_int(tdata, UVM_ALL_ON)
         `uvm_field_int(tlast, UVM_ALL_ON)
         `uvm_field_int(tready, UVM_ALL_ON)
@@ -62,11 +62,11 @@ class axis_driver #(parameter int DATA_WIDTH = 32)
 
     virtual axis_if #(DATA_WIDTH) vif;
 
-    function new(string name = "axis_Driver", uvm_component parent = null);
+    function new(string name = "axis_driver", uvm_component parent = null);
         super.new(name, parent);
     endfunction
 
-    `uvm_component_utils(axis_sequencer #(DATA_WIDTH))
+    `uvm_component_utils(axis_driver #(DATA_WIDTH))
 
     virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
@@ -128,7 +128,7 @@ class axis_monitor #(parameter int DATA_WIDTH = 32) extends uvm_monitor;
         ap = new("ap", this); // Instantiate TLM Analysis Port
 
         if (!uvm_config_db#(virtual axis_if #(DATA_WIDTH))::get(this, "", "vif", vif)) begin
-            `uvm_fatal_("MON_NO_VIF", "Virtual interference handle 'vif' not found in uvm_config_db!")
+            `uvm_fatal("MON_NO_VIF", "Virtual interference handle 'vif' not found in uvm_config_db!")
         end
     endfunction
 
@@ -166,7 +166,7 @@ class axis_agent #(parameter int DATA_WIDTH = 32 ) extends uvm_agent;
         super.new(name, parent);
     endfunction
 
-    `uvm_component_utils(axis_monitor #(DATA_WIDTH))
+    `uvm_component_utils(axis_agent #(DATA_WIDTH))
 
     // TOP-DOWN BUILD_PHASE
     virtual function void build_phase(uvm_phase phase);
@@ -177,8 +177,8 @@ class axis_agent #(parameter int DATA_WIDTH = 32 ) extends uvm_agent;
 
         // Driver and Sequencer are ONLY built if agent is ACTIVE
         if (get_is_active() == UVM_ACTIVE) begin
-            seqr = axis_sequencer #(DATA_WIDTH::type_id::create("seqr", this));
-            drv  = axis_drover    #(DATA_WIDTH::type_id::create("drv", this));
+            seqr = axis_sequencer #(DATA_WIDTH)::type_id::create("seqr", this);
+            drv  = axis_driver    #(DATA_WIDTH)::type_id::create("drv", this);
         end
     endfunction
 
@@ -227,7 +227,7 @@ endclass
 // ========================================================================
 // 8 . ENVIRONMENT CONTAINER (uvm_env)
 // ========================================================================
-class axis_env #(parameter int DATA_WIDTH = 32) extends uv,_env;
+class axis_env #(parameter int DATA_WIDTH = 32) extends uvm_env;
     axis_agent      #(DATA_WIDTH) agent;
     axis_scoreboard #(DATA_WIDTH) scb;
 
@@ -260,7 +260,7 @@ endclass
 class axis_base_test extends uvm_test;
     axis_env #(32) env;
 
-    function new (string new = "axis_base_test", uvm_component parent = null);
+    function new(string name = "axis_base_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction
 
@@ -289,7 +289,7 @@ endclass
 // ========================================================================
 // 10. TOP TESTBENCH MODULE (Static Domain)
 // ========================================================================
-module top_axis_tb_skeleton;
+module axis_tb_skeleton;
     logic clk;
 
     initial begin
