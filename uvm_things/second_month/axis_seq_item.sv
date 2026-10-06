@@ -1,5 +1,9 @@
 `include "uvm_macros.svh"
 import uvm_pkg::*;
+// ============================================================================
+// File: axis_seq_item.sv
+// Description: Production-grade AXI4-Stream Transaction Sequence Item
+// ============================================================================
 
 class axis_seq_item #(
     parameter DATA_WIDTH    = 32,
