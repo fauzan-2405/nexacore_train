@@ -198,18 +198,21 @@ module axis_wrapper #(
 
   fifo_entry_t fifo_q[$];
   localparam int FIFO_DEPTH = 16;
+  // Replace the continuous assigns:
 
-  assign s_axis_tready = (fifo_q.size() < FIFO_DEPTH);
-  assign m_axis_tvalid = (fifo_q.size() > 0);
-
-  assign m_axis_tdata = (fifo_q.size() > 0) ? fifo_q[0].data : '0;
-  assign m_axis_tkeep = (fifo_q.size() > 0) ? fifo_q[0].keep : '0;
-  assign m_axis_tlast = (fifo_q.size() > 0) ? fifo_q[0].last : 1'b0;
+  always_comb begin
+    s_axis_tready = (fifo_q.size() < FIFO_DEPTH);
+    m_axis_tvalid = (fifo_q.size() > 0);
+    m_axis_tdata  = (fifo_q.size() > 0) ? fifo_q[0].data : '0;
+    m_axis_tkeep  = (fifo_q.size() > 0) ? fifo_q[0].keep : '0;
+    m_axis_tlast  = (fifo_q.size() > 0) ? fifo_q[0].last : 1'b0;
+  end
 
   always_ff @(posedge aclk or negedge aresetn) begin
     if (!aresetn) begin
       fifo_q.delete();
     end else begin
+//      $display("[%0t] [DUT_DEBUG] fifo_q.size = %0d", $time, fifo_q.size());
       // Push into FIFO on Slave Write Handshake
       if (s_axis_tvalid && s_axis_tready) begin
         fifo_entry_t entry;
@@ -221,7 +224,10 @@ module axis_wrapper #(
 
       // Pop from FIFO on Master Read Handshake
       if (m_axis_tvalid && m_axis_tready) begin
+//      if (m_axis_tready) begin
+        $display("ahok!");
         if (fifo_q.size() > 0) begin
+          $display("cihuy!");
           void'(fifo_q.pop_front());
         end
       end
@@ -454,6 +460,7 @@ class axis_scoreboard extends uvm_scoreboard;
         in_tlm_fifo.get(exp_item);
         exp_q.push_back(exp_item);
         `uvm_info("SCB_IN", $sformatf("Queued Expected Packet into Golden FIFO (Queue Size=%0d)", exp_q.size()), UVM_MEDIUM)
+//        `uvm_info("DUT_FIFO", $sformatf("Current DUT fifo_q.size = %0d", $root.top_tb.dut.fifo_q.size()), UVM_MEDIUM)
       end
 
       // Thread 2: Process outgoing actual transactions & check equality
