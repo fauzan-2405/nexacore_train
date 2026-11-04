@@ -150,13 +150,13 @@ module top_tb;
     rm.ctrl_reg.mode.set(2'b01); // Set Loopback mode
 
     `uvm_info("RAL_TEST", $sformatf("Software Set -> Desired Value: 0x%0h, Mirrored Value: 0x%0h",
-              rm.ctrl_reg.get_desired_value(), rm.ctrl_reg.get_mirrored_value()), UVM_LOW)
+              rm.ctrl_reg.get(), rm.ctrl_reg.get_mirrored_value()), UVM_LOW)
 
     // 3. Simulate hardware predict update (predicting hardware bus write completion)
-    rm.ctrl_reg.predict(rm.ctrl_reg.get_desired_value());
+    rm.ctrl_reg.predict(rm.ctrl_reg.get());
 
     `uvm_info("RAL_TEST", $sformatf("After Predict -> Desired Value: 0x%0h, Mirrored Value: 0x%0h",
-              rm.ctrl_reg.get_desired_value(), rm.ctrl_reg.get_mirrored_value()), UVM_LOW)
+              rm.ctrl_reg.get(), rm.ctrl_reg.get_mirrored_value()), UVM_LOW)
 
     `uvm_info("RAL_TEST", "Week 9 RAL Register Block Model Verification PASSED.", UVM_LOW)
   end
