@@ -37,7 +37,7 @@ endclass
 // 2. Physical AXI-Lite Interface & Dummy DUT Module with HDL Backdoor Path
 // ----------------------------------------------------------------------------
 interface axi_lite_if(input logic clk, input logic rst_n);
-  logic         ;
+  logic        pwrite;
   logic        penable;
   logic        psel;
   logic [31:0] paddr;
@@ -65,8 +65,8 @@ module dut_wrapper(
   axi_lite_if vif
 );
   // Internal Register Flip-Flops (HDL Backdoor Path targets)
-  logic [31:0] ctrl_reg_ff;    // Target path: top_tb.dut.ctrl_reg_ff
-  logic [31:0] status_reg_ff;  // Target path: top_tb.dut.status_reg_ff
+  (* keep = "true" *) logic [31:0] ctrl_reg_ff;    
+  (* keep = "true" *) logic [31:0] status_reg_ff;
 
   // Simple APB/AXI-Lite register decoder logic
   always_ff @(posedge clk or negedge rst_n) begin
@@ -189,7 +189,7 @@ class reg2axi_adapter extends uvm_reg_adapter;
   function new(string name = "reg2axi_adapter");
     super.new(name);
     supports_byte_enable = 1;
-    provides_responses   = 1;
+    provides_responses   = 0;
   endfunction
 
   // A. reg2bus: Converts RAL Abstract Operation to Physical Bus Sequence Item
@@ -285,21 +285,21 @@ class axis_reg_block extends uvm_reg_block;
   endfunction
 
   virtual function void build();
-    ctrl_reg   = axis_ctrl_reg::type_id::create("ctrl_reg");
-    ctrl_reg.configure(this, null, "ctrl_reg_ff"); // Relative HDL slice name
+    ctrl_reg = axis_ctrl_reg::type_id::create("ctrl_reg");
+    ctrl_reg.configure(this, null, "");
     ctrl_reg.build();
+    ctrl_reg.add_hdl_path_slice("ctrl_reg_ff", 0, 32);
 
     status_reg = axis_status_reg::type_id::create("status_reg");
-    status_reg.configure(this, null, "status_reg_ff");
+    status_reg.configure(this, null, "");
     status_reg.build();
+    status_reg.add_hdl_path_slice("status_reg_ff", 0, 32);
 
     default_map = create_map("default_map", 'h0, 4, UVM_LITTLE_ENDIAN, 1);
     default_map.add_reg(ctrl_reg,   'h00, "RW");
     default_map.add_reg(status_reg, 'h04, "RO");
 
-    // Declare Root HDL Path for Backdoor access (top_tb.dut)
-    add_hdl_path("top_tb.dut");
-
+    set_hdl_path_root("top_tb.dut");
     lock_model();
   endfunction
 endclass
@@ -322,6 +322,7 @@ class axis_env extends uvm_env;
   virtual function void build_phase(uvm_phase phase);
     super.build_phase(phase);
     reg_block = axis_reg_block::type_id::create("reg_block", this);
+    reg_block.configure(null, ""); // Initialize root block hierarchy
     reg_block.build();
 
     adapter   = reg2axi_adapter::type_id::create("adapter", this);
@@ -373,9 +374,15 @@ class axis_frontdoor_vs_backdoor_seq extends uvm_sequence;
     // ------------------------------------------------------------------------
     `uvm_info("RAL_DEMO", "3. Executing BACKDOOR WRITE (0x0000_000F directly to RTL flip-flops)...", UVM_LOW)
     reg_block.ctrl_reg.write(status, 32'h0000_000F, UVM_BACKDOOR, .parent(this));
+    if (status != UVM_IS_OK) begin
+        `uvm_error("RAL_DEMO", "Backdoor WRITE Failed! Check HDL path and simulator debug flags")
+    end
 
     `uvm_info("RAL_DEMO", "4. Executing BACKDOOR READ from ctrl_reg...", UVM_LOW)
     reg_block.ctrl_reg.read(status, rdata, UVM_BACKDOOR, .parent(this));
+    if (status != UVM_IS_OK) begin
+        `uvm_error("RAL_DEMO", "Backdoor READ Failed! Check HDL path and simulator debug flags")
+    end
     `uvm_info("RAL_DEMO", $sformatf("   -> Backdoor Read Returned: 0x%0h (Mirrored: 0x%0h)", 
               rdata, reg_block.ctrl_reg.get_mirrored_value()), UVM_LOW)
 
