@@ -34,7 +34,7 @@ endinterface
 // ----------------------------------------------------------------------------
 // B. AXI4-Stream Data Streaming Interface
 // ----------------------------------------------------------------------------
-interface axi_if (input logic clk, input logic rst_n);
+interface axis_if (input logic clk, input logic rst_n);
     logic tvalid;
     logic tready;
     logic [31:0] tdata;
@@ -60,8 +60,8 @@ module axis_fifo_dut(
     input logic clk,
     input logic rst_n,
     axis_lite_if    ctrl_vif,
-    axi_if          s_axis_vif,
-    axi_if          m_axis_vif
+    axis_if          s_axis_vif,
+    axis_if          m_axis_vif
 );
     // Internal register FF (HDL Backdoor Path Targets)
     logic [31:0] ctrl_reg_ff;   // Root path: top_tb.dut.ctrl_reg_ff (Offset 0x00)
@@ -110,7 +110,8 @@ module axis_fifo_dut(
 
     // FIFO Push & Pop Operational Logic
     wire dut_enabled = ctrl_reg_ff[0];
-    wire [1:0] mode  = ctrl_reg_ff[3:2]; // 00: Normal, 01: Loopback, 10: Bypass
+    wire [1:0] mode  = ctrl_reg_ff[3:2]; 
+    // 00: Normal, 01: Loopback, 10: Bypass
 
     assign s_axis_vif.tready = dut_enabled && !fifo_full_w;
 
@@ -201,7 +202,7 @@ class axis_seq_item extends uvm_sequence_item;
     `uvm_object_utils_begin(axis_seq_item)
         `uvm_field_enum(mode_e, mode, UVM_ALL_ON)
         `uvm_field_enum(fifo_status_e, fifo_status, UVM_ALL_ON)
-        `uvm_field_array(data, UVM_ALL_ON | UVM_HEX)
+        `uvm_field_array_int(data, UVM_ALL_ON | UVM_HEX)
         `uvm_field_int(stall_delay, UVM_ALL_ON | UVM_HEX)
         `uvm_field_int(tlast, UVM_ALL_ON | UVM_HEX)
     `uvm_object_utils_end
@@ -216,8 +217,8 @@ endclass
 // 4. PHYSICAL DRIVERS & SEQUENCERS
 // ============================================================================
 
-typedef uvm_sequencer #(axis_lite_seq_item) axi_lite_sequencer;
-typedef uvm_sequencer #(axis_sew item) axi_lite_sequencer;
+typedef uvm_sequencer #(axi_lite_seq_item) axi_lite_sequencer;
+typedef uvm_sequencer #(axis_seq_item) axis_stream_sequencer;
 
 // A. AXI-Lite Driver
 class axi_lite_driver extends uvm_driver #(axi_lite_seq_item);
@@ -356,7 +357,7 @@ class axis_ctrl_reg extends uvm_reg;
     rand uvm_reg_field mode;
     `uvm_object_utils(axis_ctrl_reg)
 
-    function neew (string name = "axis_ctrl_reg");
+    function new(string name = "axis_ctrl_reg");
         super.new(name, 32, UVM_NO_COVERAGE);
     endfunction
 
@@ -365,7 +366,7 @@ class axis_ctrl_reg extends uvm_reg;
         soft_rst = uvm_reg_field::type_id::create("soft_rst");
         mode     = uvm_reg_field::type_id::create("mode");
 
-        enable.configure(this, 1, 0, "RW", 0. 1'b0. 1, 1, 0);
+        enable.configure(this, 1, 0, "RW", 0, 1'b0, 1, 1, 0);
         soft_rst.configure(this, 1, 1, "RW", 0, 1'b0, 1, 1, 0);
         mode.configure(this, 2, 2, "RW", 0, 2'b00, 1, 1, 0);
     endfunction
@@ -392,22 +393,22 @@ class axis_status_reg extends uvm_reg;
     endfunction
 endclass
 
-class axis_req_block extends uvm_reg_block;
+class axis_reg_block extends uvm_reg_block;
     rand axis_ctrl_reg ctrl_reg;
     rand axis_status_reg status_reg;
-    `uvm_object_utils(axis_req_block)
+    `uvm_object_utils(axis_reg_block)
 
-    function new(string name "axis_reg_block");
+    function new(string name = "axis_reg_block");
         super.new(name, UVM_NO_COVERAGE);
     endfunction
 
     virtual function void build();
         ctrl_reg = axis_ctrl_reg::type_id::create("ctrl_reg");
-        ctrl_reg = configure(this, null. "ctrl_reg_ff");
+        ctrl_reg.configure(this, null, "ctrl_reg_ff");
         ctrl_reg.build();
 
         status_reg = axis_status_reg::type_id::create("status_reg");
-        status_reg = configure("this", null, "status_reg_ff");
+        status_reg.configure("this", null, "status_reg_ff");
         status_reg.build();
 
         default_map = create_map("default_map", 'h0, 4, UVM_LITTLE_ENDIAN, 1);
@@ -426,7 +427,7 @@ class reg2axi_adapter extends uvm_reg_adapter;
     function new (string name = "reg2axi_adapter");
         super.new(name);
         supports_byte_enable    = 1;
-        provides_reponses       = 0;
+        provides_responses      = 0;
     endfunction
 
     virtual function uvm_sequence_item reg2bus(const ref uvm_reg_bus_op rw);
@@ -459,7 +460,7 @@ class axis_coverage_subscriber extends uvm_subscriber #(axis_seq_item);
         option.per_instance = 1;
         option.comment      = "AXI4-Stream Capstone Functional Coverage";
 
-        cp_pkt_len: coverpoint pkt.data.size(); {
+        cp_pkt_len: coverpoint pkt.data.size() {
             bins single_word = {1};
             bins small_burst = {[2:4]};
             bins med_burst   = {[5:8]};
@@ -485,8 +486,8 @@ class axis_coverage_subscriber extends uvm_subscriber #(axis_seq_item);
         }
 
         cross_mode_x_fifo: cross cp_mode, cp_fifo_status {
-            ignore_bins ignore_byp_fifo =   binsof(cp_mode) intersect {axi_seq_item::MODE_BYPASS} &&
-                                            binsof(cp_mode_status) intersect {axi_seq_item::FIFO_MID, axis_seq_item::FIFO_FULL};
+            ignore_bins ignore_byp_fifo =   binsof(cp_mode) intersect {axis_seq_item::MODE_BYPASS} &&
+                                            binsof(cp_mode_status) intersect {axis_seq_item::FIFO_MID, axis_seq_item::FIFO_FULL};
         }
     endgroup
 
@@ -512,11 +513,11 @@ class axis_scoreboard extends uvm_scoreboard;
     `uvm_component_utils (axis_scoreboard)
 
     uvm_analysis_imp #(axis_seq_item, axis_scoreboard) item_export;
-    bit [31:0] expected queue[$];
+    bit [31:0] expected_queue[$];
     int match_count;
     int mismatch_count;
 
-    function new(string name = "axis_scoreboard", uvm_component parent null);
+    function new(string name = "axis_scoreboard", uvm_component parent = null);
         super.new(name, parent);
         item_export = new("item_export", this);
         match_count = 0;
@@ -570,7 +571,7 @@ class axis_ral_cfg_seq extends uvm_sequence;
         reg_block.ctrl_reg.write(status, 32'h0000_0001, UVM_BACKDOOR, .parent(this)); // Enable DUT 
 
         // 2. Frontdoor Configuration Write
-        `uvm_info("RAL_SEQ", "Frontdoor Mode Configuration (Enable + Normal Mode)...", UVM_LOW)
+        `uvm_info("RAL_SEQ", "Frontdoor Mode Configuration (Enable + Loopback Mode)...", UVM_LOW)
         reg_block.ctrl_reg.write("status", 32'h0000_0005, UVM_FRONTDOOR, .parent(this));
 
         // 3. Frontdoor Verification Read 
@@ -697,11 +698,11 @@ class axis_env extends uvm_env;
         super.connect_phase(phase);
         // Connect Drivers to Sequencers
         axi_drv.seq_item_port.connect(axi_seqr.seq_item_export);
-        axis_drv.seq_item_port.connect(axi_seqr.seq_item_export);
+        axis_drv.seq_item_port.connect(axis_seqr.seq_item_export);
 
         // Connect RAL default_map to Sequencer and Adapter
         reg_block.default_map.set_sequencer(axi_seqr, adapter);
-        reg_block.default_map.set_auto_predict[1];
+        reg_block.default_map.set_auto_predict(1);
 
         // Comnnect Virtual Sequencer sub-handles
         v_sqr.axi_seqr  = axi_seqr;
@@ -718,11 +719,11 @@ endclass
 // ============================================================================
 // 11. TOP-LEVEL TEST CLASS (axis_month3_capstone_test)
 // ============================================================================
-class axis_month3_capstone_test extend uvm_test;
+class axis_month3_capstone_test extends uvm_test;
     `uvm_component_utils(axis_month3_capstone_test)
     axis_env env;
 
-    function new (string name = "axis_month3_capstone_test", uvm_componenet parent = null);
+    function new (string name = "axis_month3_capstone_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction
 
