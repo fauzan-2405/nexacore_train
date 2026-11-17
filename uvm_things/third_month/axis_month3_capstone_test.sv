@@ -59,7 +59,7 @@ endinterface
 module axis_fifo_dut(
     input logic clk,
     input logic rst_n,
-    axis_lite_if    ctrl_vif,
+    axi_lite_if      ctrl_vif,
     axis_if          s_axis_vif,
     axis_if          m_axis_vif
 );
@@ -203,8 +203,8 @@ class axis_seq_item extends uvm_sequence_item;
         `uvm_field_enum(mode_e, mode, UVM_ALL_ON)
         `uvm_field_enum(fifo_status_e, fifo_status, UVM_ALL_ON)
         `uvm_field_array_int(data, UVM_ALL_ON | UVM_HEX)
-        `uvm_field_int(stall_delay, UVM_ALL_ON | UVM_HEX)
-        `uvm_field_int(tlast, UVM_ALL_ON | UVM_HEX)
+        `uvm_field_int(stall_delay, UVM_ALL_ON | UVM_DEC)
+        `uvm_field_int(tlast, UVM_ALL_ON)
     `uvm_object_utils_end
 
     function new(string name = "axis_seq_item");
@@ -229,7 +229,7 @@ class axi_lite_driver extends uvm_driver #(axi_lite_seq_item);
         super.new(name, parent);
     endfunction
 
-    virtual function void build_phase(uvm_phase);
+    virtual function void build_phase(uvm_phase phase);
         super.build_phase(phase);
         if (!uvm_config_db#(virtual axi_lite_if)::get(this, "", "vif", vif))
             `uvm_fatal("NO_VIF", "Virtual interface not found for axi_lite_driver")
@@ -388,7 +388,7 @@ class axis_status_reg extends uvm_reg;
         fifo_error = uvm_reg_field::type_id::create("fifo_error");
 
         fifo_full.configure(this, 1, 0, "RO", 0, 1'b0, 1, 0, 0);
-        fifo_empty.configure(this, 1, 1, "RO", 0, 1'b0, 1, 0, 0);
+        fifo_empty.configure(this, 1, 1, "RO", 0, 1'b1, 1, 0, 0);
         fifo_error.configure(this, 1, 2, "RO", 0, 1'b0, 1, 0, 0);
     endfunction
 endclass
@@ -408,7 +408,7 @@ class axis_reg_block extends uvm_reg_block;
         ctrl_reg.build();
 
         status_reg = axis_status_reg::type_id::create("status_reg");
-        status_reg.configure("this", null, "status_reg_ff");
+        status_reg.configure(this, null, "status_reg_ff");
         status_reg.build();
 
         default_map = create_map("default_map", 'h0, 4, UVM_LITTLE_ENDIAN, 1);
@@ -439,9 +439,9 @@ class reg2axi_adapter extends uvm_reg_adapter;
         return bus_item;
     endfunction
 
-    virtual function void bus2reg(uvm_sequence_item bus item, reg uvm_reg_bus_op rw);
+    virtual function void bus2reg(uvm_sequence_item bus_item, ref uvm_reg_bus_op rw);
         axi_lite_seq_item bus_pkt;
-        if (!cast(bus_pkt, bus_item)) return;
+        if (!$cast(bus_pkt, bus_item)) return;
         rw.kind     = (bus_pkt.op == axi_lite_seq_item::AXI_WRITE) ? UVM_WRITE : UVM_READ;
         rw.addr     = bus_pkt.addr;
         rw.data     = bus_pkt.data;
@@ -487,7 +487,7 @@ class axis_coverage_subscriber extends uvm_subscriber #(axis_seq_item);
 
         cross_mode_x_fifo: cross cp_mode, cp_fifo_status {
             ignore_bins ignore_byp_fifo =   binsof(cp_mode) intersect {axis_seq_item::MODE_BYPASS} &&
-                                            binsof(cp_mode_status) intersect {axis_seq_item::FIFO_MID, axis_seq_item::FIFO_FULL};
+                                            binsof(cp_fifo_status) intersect {axis_seq_item::FIFO_MID, axis_seq_item::FIFO_FULL};
         }
     endgroup
 
@@ -564,7 +564,7 @@ class axis_ral_cfg_seq extends uvm_sequence;
 
     virtual task body();
         uvm_status_e status;
-        uvm_reg_data rdata;
+        uvm_reg_data_t rdata;
 
         // 1.Backdoor Initialization 
         `uvm_info("RAL_SEQ", "Backdoor Pre-loading DUT registers...", UVM_LOW)
@@ -572,7 +572,7 @@ class axis_ral_cfg_seq extends uvm_sequence;
 
         // 2. Frontdoor Configuration Write
         `uvm_info("RAL_SEQ", "Frontdoor Mode Configuration (Enable + Loopback Mode)...", UVM_LOW)
-        reg_block.ctrl_reg.write("status", 32'h0000_0005, UVM_FRONTDOOR, .parent(this));
+        reg_block.ctrl_reg.write(status, 32'h0000_0005, UVM_FRONTDOOR, .parent(this));
 
         // 3. Frontdoor Verification Read 
         reg_block.ctrl_reg.read(status, rdata, UVM_FRONTDOOR, .parent(this));
@@ -625,11 +625,11 @@ class axis_month3_capstone_vseq extends uvm_sequence;
         `uvm_info("VSEQ", "==================================================", UVM_LOW)
         `uvm_info("VSEQ", "  STAGE 2: CONCURRENT STREAM TRAFFIC & MONITORING ", UVM_LOW)
         `uvm_info("VSEQ", "==================================================", UVM_LOW)
-        stream_req = axis_stream_traffic_seq::type_id::create("stream_seq");
+        stream_seq = axis_stream_traffic_seq::type_id::create("stream_seq");
 
         fork
             // Thread 1: Stream 30 packets into FIFO
-            stream_Seq.start(p_sequencer.axis_seqr);
+            stream_seq.start(p_sequencer.axis_seqr);
 
             // Thread 2: Periodic RAL Status Register Polling
             begin
@@ -659,7 +659,7 @@ class axis_env extends uvm_env;
     // Agents
     axi_lite_sequencer      axi_seqr;
     axi_lite_driver         axi_drv;
-    aixs_stream_sequencer   axis_seqr;
+    axis_stream_sequencer   axis_seqr;
     axis_stream_driver      axis_drv;
     axis_stream_monitor     axis_mon;
 
@@ -805,8 +805,10 @@ module top_tb;
 
     // UVM Config DB Registrations & Test Execution
     initial begin
-        uvm_config_db#(virtual axi_lite_ig)::set(null, "*", "vif", ctrl_if);
+        uvm_config_db#(virtual axi_lite_if)::set(null, "*", "vif", ctrl_if);
         uvm_config_db#(virtual axis_if)::set(null, "*axis_stream_driver*", "vif", s_axis_if);
         uvm_config_db#(virtual axis_if)::set(null, "*axis_stream_monitor*", "vif", s_axis_if);
+
+        run_test("axis_month3_capstone_test");
     end
 endmodule
