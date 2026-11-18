@@ -524,7 +524,7 @@ class axis_scoreboard extends uvm_scoreboard;
         mismatch_count = 0;
     endfunction
 
-    virtual function void write(axis_seq_item);
+    virtual function void write(axis_seq_item item);
         match_count++;
         `uvm_info("SCB", $sformatf("Verified Data Packet Transfer: 0x%08h | Matches: %0d", 
               item.data[0], match_count), UVM_HIGH)
@@ -711,7 +711,8 @@ class axis_env extends uvm_env;
 
         // Connecting the Monitor Analysis Port to Scoreboard & Coverage Subscriber
         axis_mon.ap.connect(scb.item_export);
-        axis_drv.seq_item_port.connect(cov_sub.analysis_export);
+        // axis_drv.seq_item_port.connect(cov_sub.analysis_export);
+        axis_mon.ap.connect(cov_sub.analysis_export);
     endfunction
 endclass
 
