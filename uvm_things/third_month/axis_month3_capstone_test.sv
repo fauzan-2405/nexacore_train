@@ -271,10 +271,12 @@ endclass
 // B. AXI-Stream Driver
 class axis_stream_driver extends uvm_driver #(axis_seq_item);
     virtual axis_if vif;
+    uvm_analysis_port #(axis_seq_item) ap;
     `uvm_component_utils(axis_stream_driver)
 
     function new(string name = "axis_stream_driver", uvm_component parent = null);
         super.new(name, parent);
+        ap = new("ap", this);
     endfunction
 
     virtual function void build_phase(uvm_phase phase);
@@ -311,6 +313,7 @@ class axis_stream_driver extends uvm_driver #(axis_seq_item);
             vif.cb_drv.tvalid   <= 1'b0;
             vif.cb_drv.tlast    <= 1'b0;
             seq_item_port.item_done();
+            ap.write(req);
         end
     endtask
 endclass
@@ -335,14 +338,28 @@ class axis_stream_monitor extends uvm_monitor;
     endfunction
 
     virtual task run_phase(uvm_phase phase);
+        axis_seq_item item;
+        bit [31:0]    beats[$];
+        int           idle = 0;
+    
         forever begin
             @(vif.cb_mon);
             if (vif.cb_mon.tvalid && vif.cb_mon.tready) begin
-                axis_seq_item item = axis_seq_item::type_id::create("mon_item");
-                item.data    = new[1];
-                item.data[0] = vif.cb_mon.tdata;
-                item.tlast   = vif.cb_mon.tlast;
-                ap.write(item); 
+                beats.push_back(vif.cb_mon.tdata);
+    
+                if (vif.cb_mon.tlast) begin
+                    item = axis_seq_item::type_id::create("mon_item");
+                    item.data = new[beats.size()];
+                    foreach (beats[i]) item.data[i] = beats[i];
+                    item.tlast       = 1'b1;
+                    item.stall_delay = (idle > 0) ? idle - 1 : 0;
+                    if (item.stall_delay > 10) item.stall_delay = 10; 
+                    ap.write(item);
+                    beats.delete();
+                    idle = 0;
+                end
+            end else if (!vif.cb_mon.tvalid && beats.size() == 0) begin
+                idle++;
             end
         end
     endtask
@@ -455,6 +472,7 @@ endclass
 class axis_coverage_subscriber extends uvm_subscriber #(axis_seq_item);
     `uvm_component_utils(axis_coverage_subscriber)
     axis_seq_item pkt;
+    axis_reg_block regmodel;
 
     covergroup cg_axis_functional;
         option.per_instance = 1;
@@ -497,6 +515,11 @@ class axis_coverage_subscriber extends uvm_subscriber #(axis_seq_item);
     endfunction
 
     virtual function void write(axis_seq_item t);
+        int cnt = top_tb.dut.fifo_count;
+        t.fifo_status = (cnt == 0)  ? axis_seq_item::FIFO_EMPTY :
+                        (cnt >= 16) ? axis_seq_item::FIFO_FULL  :
+                                      axis_seq_item::FIFO_MID;
+        t.mode = axis_seq_item::mode_e'(regmodel.ctrl_reg.mode.get_mirrored_value());
         this.pkt = t;
         cg_axis_functional.sample();
     endfunction
@@ -582,7 +605,7 @@ endclass
 
 // Child Sequence B: AXI4-Stream Traffic Burst
 class axis_stream_traffic_seq extends uvm_sequence #(axis_seq_item);
-    int num_packets = 25;
+    int num_packets = 200;
     `uvm_object_utils(axis_stream_traffic_seq)
 
     function new(string name = "axis_stream_traffic_seq");
@@ -628,8 +651,13 @@ class axis_month3_capstone_vseq extends uvm_sequence;
         stream_seq = axis_stream_traffic_seq::type_id::create("stream_seq");
 
         fork
-            // Thread 1: Stream 30 packets into FIFO
-            stream_seq.start(p_sequencer.axis_seqr);
+            // Thread 1: Stream packets into FIFO
+            // stream_seq.start(p_sequencer.axis_seqr); OLD ONE
+            uvm_status_e status;
+            for (int m = 0; m < 3; m++) begin
+                p_sequencer.reg_block.ctrl_reg.write(status, (m << 2) | 1, UVM_FRONTDOOR, .parent(this));
+                stream_seq.start(p_sequencer.axis_seqr);
+            end
 
             // Thread 2: Periodic RAL Status Register Polling
             begin
@@ -713,6 +741,10 @@ class axis_env extends uvm_env;
         axis_mon.ap.connect(scb.item_export);
         // axis_drv.seq_item_port.connect(cov_sub.analysis_export);
         axis_mon.ap.connect(cov_sub.analysis_export);
+        // axis_drv.ap.connect(cov_sub.analysis_export); // With num_packets = 200, coverage = 90.48%
+        
+        // Connecting the Coverage Subscriber with Register Model
+        cov_sub.regmodel = reg_block;
     endfunction
 endclass
 
@@ -764,6 +796,13 @@ class axis_month3_capstone_test extends uvm_test;
         end else begin
             `uvm_error("REPORT", "  STATUS: >>> CAPSTONE FAILED <<<")
         end
+        
+        `uvm_info("COV", $sformatf("len=%0.1f stall=%0.1f mode=%0.1f fifo=%0.1f cross=%0.1f",
+            env.cov_sub.cg_axis_functional.cp_pkt_len.get_inst_coverage(),
+            env.cov_sub.cg_axis_functional.cp_stall_delay.get_inst_coverage(),
+            env.cov_sub.cg_axis_functional.cp_mode.get_inst_coverage(),
+            env.cov_sub.cg_axis_functional.cp_fifo_status.get_inst_coverage(),
+            env.cov_sub.cg_axis_functional.cross_mode_x_fifo.get_inst_coverage()), UVM_LOW)
         `uvm_info("REPORT", "==================================================", UVM_LOW)
     endfunction
 endclass
@@ -802,7 +841,17 @@ module top_tb;
     );
 
     // Loopback connection on master output for self-loopback verification
-    assign m_axis_if.tready = 1'b1;
+    //assign m_axis_if.tready = 1'b1; // OLDDD
+    logic m_ready_r;
+    assign m_axis_if.tready = m_ready_r;
+    
+    initial begin
+        m_ready_r = 1;
+        forever begin
+            repeat ($urandom_range(5, 40)) @(posedge clk);
+            m_ready_r = ~m_ready_r;
+        end
+    end
 
     // UVM Config DB Registrations & Test Execution
     initial begin
