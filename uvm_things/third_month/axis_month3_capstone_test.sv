@@ -807,8 +807,8 @@ module top_tb;
     // UVM Config DB Registrations & Test Execution
     initial begin
         uvm_config_db#(virtual axi_lite_if)::set(null, "*", "vif", ctrl_if);
-        uvm_config_db#(virtual axis_if)::set(null, "*axis_stream_driver*", "vif", s_axis_if);
-        uvm_config_db#(virtual axis_if)::set(null, "*axis_stream_monitor*", "vif", s_axis_if);
+        uvm_config_db#(virtual axis_if)::set(null, "*axis_drv*", "vif", s_axis_if);
+        uvm_config_db#(virtual axis_if)::set(null, "*axis_mon*", "vif", s_axis_if);
 
         run_test("axis_month3_capstone_test");
     end
