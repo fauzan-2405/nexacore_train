@@ -149,7 +149,8 @@ module axis_fifo_dut(
 
     // Output driving
     assign m_axis_vif.tvalid = dut_enabled && !fifo_empty_w;
-    assign m_axis_vif.tdata  = fifo_mem[rd_ptr[3:0]];
+    //assign m_axis_vif.tdata  = fifo_mem[rd_ptr[3:0]];         // real one
+    assign m_axis_vif.tdata = fifo_mem[rd_ptr[3:0]] ^ 32'h1;   // deliberate bug
     assign m_axis_vif.tkeep  = fifo_keep[rd_ptr[3:0]];
     assign m_axis_vif.tlast  = fifo_last[rd_ptr[3:0]];
 endmodule
@@ -299,7 +300,7 @@ class axis_stream_driver extends uvm_driver #(axis_seq_item);
 
             // Stream
             for (int i = 0; i < req.data.size(); i++) begin
-                @(vif.cb_drv);
+                //@(vif.cb_drv);
                 vif.cb_drv.tvalid   <= 1'b1;
                 vif.cb_drv.tdata    <= req.data[i];
                 vif.cb_drv.tkeep    <= 4'b1111;
@@ -313,6 +314,7 @@ class axis_stream_driver extends uvm_driver #(axis_seq_item);
             vif.cb_drv.tvalid   <= 1'b0;
             vif.cb_drv.tlast    <= 1'b0;
             seq_item_port.item_done();
+            //$display("[DRV] sent packet len = %0d", req.data.size());
             ap.write(req);
         end
     endtask
@@ -353,7 +355,8 @@ class axis_stream_monitor extends uvm_monitor;
                     foreach (beats[i]) item.data[i] = beats[i];
                     item.tlast       = 1'b1;
                     item.stall_delay = (idle > 0) ? idle - 1 : 0;
-                    if (item.stall_delay > 10) item.stall_delay = 10; 
+                    if (item.stall_delay > 10) item.stall_delay = 10;
+                    //$display("[MON] saw packet len = %0d", item.data.size()); 
                     ap.write(item);
                     beats.delete();
                     idle = 0;
@@ -532,33 +535,81 @@ endclass
 // ============================================================================
 // 8. TLM SCOREBOARD
 // ============================================================================
+`uvm_analysis_imp_decl(_exp)    // These two used to create two differently-named write functions
+`uvm_analysis_imp_decl(_act)    // so 1 scoreboard can listen to two sources
+
 class axis_scoreboard extends uvm_scoreboard;
     `uvm_component_utils (axis_scoreboard)
 
-    uvm_analysis_imp #(axis_seq_item, axis_scoreboard) item_export;
-    bit [31:0] expected_queue[$];
+    uvm_analysis_imp_exp #(axis_seq_item, axis_scoreboard) exp_export; // from the driver
+    uvm_analysis_imp_act #(axis_seq_item, axis_scoreboard) act_export; // from the DUT (output monitor) 
+
+    axis_seq_item expected_queue[$];
     int match_count;
     int mismatch_count;
 
     function new(string name = "axis_scoreboard", uvm_component parent = null);
         super.new(name, parent);
-        item_export = new("item_export", this);
+        exp_export  = new("exp_export", this);
+        act_export  = new("act_export", this);
         match_count = 0;
         mismatch_count = 0;
     endfunction
 
-    virtual function void write(axis_seq_item item);
-        match_count++;
-        `uvm_info("SCB", $sformatf("Verified Data Packet Transfer: 0x%08h | Matches: %0d", 
-              item.data[0], match_count), UVM_HIGH)
+    // A packet the driver is sending (save it)
+    virtual function void write_exp(axis_seq_item item);
+        axis_seq_item copy = axis_seq_item::type_id::create("exp_copy");
+        copy.copy(item);
+        expected_queue.push_back(copy);
+    endfunction
+
+    // A packet from the DUT, we compare it
+    virtual function void write_act(axis_seq_item item);
+        axis_seq_item exp;
+        bit ok  = 1;
+
+        if (expected_queue.size() == 0) begin
+            mismatch_count++;
+            `uvm_error("SCB", "Packet cmae out of the DUT but none was expected")
+            return;
+        end
+
+        exp = expected_queue.pop_front();
+
+        if (exp.data.size() != item.data.size()) begin
+            ok = 0;
+            `uvm_error("SCB", $sformatf("Length mismatch: expected %0d words, got %0d",
+                                        exp.data.size(), item.data.size()))
+        end else begin
+            foreach (exp.data[i]) begin
+                if (exp.data[i] != item.data[i]) begin
+                    ok = 0;
+                    `uvm_error("SCB", $sformatf("Data mismatch at word %0d: expected 0x%08h, got 0x%08h",
+                                                i, exp.data[i], item.data[i]))
+                end
+            end
+        end
+
+        if (ok) match_count++;
+        else    mismatch_count++;
+    endfunction
+    
+    // At the end, nothing should be left waiting
+    virtual function void check_phase(uvm_phase phase);
+        super.check_phase(phase);
+        if (expected_queue.size() != 0) begin
+            mismatch_count += expected_queue.size();
+            `uvm_error("SCB", $sformatf("%0d packet(s) were sent but never came out of the DUT",
+                                        expected_queue.size()))
+        end
     endfunction
 
     virtual function void report_phase(uvm_phase phase);
         `uvm_info("SCB", "==================================================", UVM_LOW)
-        `uvm_info("SCB", $sformatf("  SCOREBOARD SUMMARY: Matches=%0d, Mismatches=%0d", 
-                match_count, mismatch_count), UVM_LOW)
+        `uvm_info("SCB", $sformatf("  SCOREBOARD SUMMARY: Matches=%0d, Mismatches=%0d",
+                  match_count, mismatch_count), UVM_LOW)
         `uvm_info("SCB", "==================================================", UVM_LOW)
-  endfunction
+    endfunction
 endclass
 
 // ============================================================================
@@ -690,6 +741,7 @@ class axis_env extends uvm_env;
     axis_stream_sequencer   axis_seqr;
     axis_stream_driver      axis_drv;
     axis_stream_monitor     axis_mon;
+    axis_stream_monitor     axis_mon_out;
 
     // RAL, Adapter, & Virtual Sequencer
     axis_reg_block          reg_block;
@@ -712,6 +764,7 @@ class axis_env extends uvm_env;
         axis_seqr = axis_stream_sequencer::type_id::create("axis_seqr", this);
         axis_drv  = axis_stream_driver::type_id::create("axis_drv", this);
         axis_mon  = axis_stream_monitor::type_id::create("axis_mon", this);
+        axis_mon_out = axis_stream_monitor::type_id::create("axis_mon_out", this);
 
         reg_block = axis_reg_block::type_id::create("reg_block", this);
         reg_block.build();
@@ -738,7 +791,8 @@ class axis_env extends uvm_env;
         v_sqr.reg_block = reg_block;
 
         // Connecting the Monitor Analysis Port to Scoreboard & Coverage Subscriber
-        axis_mon.ap.connect(scb.item_export);
+        axis_mon.ap.connect(scb.exp_export);          // Expected packets from the driver
+        axis_mon_out.ap.connect(scb.act_export);    // Actual packets from the DUT (output monitor)
         // axis_drv.seq_item_port.connect(cov_sub.analysis_export);
         axis_mon.ap.connect(cov_sub.analysis_export);
         // axis_drv.ap.connect(cov_sub.analysis_export); // With num_packets = 200, coverage = 90.48%
@@ -771,7 +825,7 @@ class axis_month3_capstone_test extends uvm_test;
         phase.raise_objection(this, "Starting Capstone Virtual Sequence");
 
         // Configure drain time (allows hardware pipeline & FIFO to settle)
-        phase.get_objection().set_drain_time(this, 100ns);
+        phase.get_objection().set_drain_time(this, 1us);
 
         vseq = axis_month3_capstone_vseq::type_id::create("vseq");
         vseq.start(env.v_sqr);
@@ -857,7 +911,8 @@ module top_tb;
     initial begin
         uvm_config_db#(virtual axi_lite_if)::set(null, "*", "vif", ctrl_if);
         uvm_config_db#(virtual axis_if)::set(null, "*axis_drv*", "vif", s_axis_if);
-        uvm_config_db#(virtual axis_if)::set(null, "*axis_mon*", "vif", s_axis_if);
+        uvm_config_db#(virtual axis_if)::set(null, "*.axis_mon",     "vif", s_axis_if);
+        uvm_config_db#(virtual axis_if)::set(null, "*.axis_mon_out", "vif", m_axis_if);
 
         run_test("axis_month3_capstone_test");
     end
