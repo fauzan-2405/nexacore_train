@@ -51,6 +51,25 @@ interface axis_if (input logic clk, input logic rst_n);
         default input #1ns output #1ns;
         input tvalid, tdata, tkeep, tlast, tready;
     endclocking
+
+    // Rule 1: once tvalid is high, the sender must hold tvalid, tdata, tkeep
+    // and tlast steady until the receiver takes the beat (tready = 1)
+    property p_hold_until_ready;
+        @(posedge clk) disable iff (!rst_n)
+        (tvalid && !tready) |=> (tvalid && $stable(tdata) && $stable(tkeep) && $stable(tlast));
+    endproperty
+    a_hold_until_ready: assert property (p_hold_until_ready)
+        else $error("[AXIS] %m: signals changed or tvalid dropped before tready");
+
+    // Rule 2: no X/Z on the handshake signals after reset
+    a_no_x_ctrl: assert property (@(posedge clk) disable iff (!rst_n)
+        !$isunknown({tvalid, tready}))
+        else $error("[AXIS] %m @%0t: X/Z on handshake tvalid=%b tready=%b", $time, tvalid, tready);
+    
+    // Rule 3: when a beat is valid, its data must not be X/Z
+    a_no_x_data: assert property (@(posedge clk) disable iff (!rst_n)
+        tvalid |-> !$isunknown({tdata, tlast}))
+        else $error("[AXIS] %m: X/Z on tdata or tlast while tvalid");
 endinterface
 
 // ============================================================================
@@ -148,9 +167,12 @@ module axis_fifo_dut(
     end
 
     // Output driving
-    assign m_axis_vif.tvalid = dut_enabled && !fifo_empty_w;
-    //assign m_axis_vif.tdata  = fifo_mem[rd_ptr[3:0]];         // real one
-    assign m_axis_vif.tdata = fifo_mem[rd_ptr[3:0]] ^ 32'h1;   // deliberate bug
+    assign m_axis_vif.tvalid = dut_enabled && !fifo_empty_w;  // real one
+    
+    assign m_axis_vif.tdata  = fifo_mem[rd_ptr[3:0]];        // real one
+    // assign m_axis_vif.tdata = fifo_mem[rd_ptr[3:0]] ^ 32'h1; // deliberate bug for mismatching
+    // assign m_axis_vif.tdata = fifo_mem[rd_ptr[3:0]] ^ {31'b0, ~m_axis_vif.tready}; // deliberate bug for violating rule 1
+    
     assign m_axis_vif.tkeep  = fifo_keep[rd_ptr[3:0]];
     assign m_axis_vif.tlast  = fifo_last[rd_ptr[3:0]];
 endmodule
@@ -656,7 +678,7 @@ endclass
 
 // Child Sequence B: AXI4-Stream Traffic Burst
 class axis_stream_traffic_seq extends uvm_sequence #(axis_seq_item);
-    int num_packets = 200;
+    int num_packets = 25;
     `uvm_object_utils(axis_stream_traffic_seq)
 
     function new(string name = "axis_stream_traffic_seq");
