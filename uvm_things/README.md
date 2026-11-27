@@ -16,8 +16,8 @@ Note: the control interface is named `axi_lite_if`, but its signals (`psel`,
 - Note: the `mode` bits are stored but do not change DUT behavior.
 
 ## Architecture
-[Insert diagram 1: stimulus and configuration path]
-[Insert diagram 2: observation and checking path]
+![Diagram 1: stimulus and configuration path](uvm_write.jpeg)
+![Diagram 2: observation and checking path](uvm_read.jpeg)
 
 - Stimulus: `axis_month3_capstone_vseq` runs on `v_sqr`, starts the RAL
   configuration sequence on `axi_seqr` and the traffic sequence on `axis_seqr`.
